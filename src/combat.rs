@@ -1,4 +1,4 @@
-use crate::model::{Action, BattleOutcome, Character, Combatant};
+use crate::model::{Action, BattleOutcome, Combatant, CombatantState};
 
 pub const HEAL_COST: i32 = 5;
 pub const HEAL_AMOUNT: i32 = 12;
@@ -33,15 +33,23 @@ pub enum CombatError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Battle {
-    pub hero: Character,
-    pub enemy: Character,
+pub struct Battle<Hero, Enemy>
+where
+    Hero: CombatantState,
+    Enemy: CombatantState,
+{
+    pub hero: Hero,
+    pub enemy: Enemy,
     pub hero_guarding: bool,
     pub outcome: BattleOutcome,
 }
 
-impl Battle {
-    pub fn new(hero: Character, enemy: Character) -> Self {
+impl<Hero, Enemy> Battle<Hero, Enemy>
+where
+    Hero: CombatantState,
+    Enemy: CombatantState,
+{
+    pub fn new(hero: Hero, enemy: Enemy) -> Self {
         Self {
             hero,
             enemy,
@@ -51,7 +59,7 @@ impl Battle {
     }
 
     pub fn hero_acts_first(&self) -> bool {
-        self.hero.stats.spd >= self.enemy.stats.spd
+        self.hero.stats().spd >= self.enemy.stats().spd
     }
 
     pub fn is_finished(&self) -> bool {
@@ -63,10 +71,10 @@ impl Battle {
             return Err(CombatError::BattleAlreadyFinished);
         }
 
-        if matches!(action, Action::Heal) && self.hero.mp < HEAL_COST {
+        if matches!(action, Action::Heal) && self.hero.mp() < HEAL_COST {
             return Err(CombatError::NotEnoughMp {
                 cost: HEAL_COST,
-                current_mp: self.hero.mp,
+                current_mp: self.hero.mp(),
             });
         }
 
@@ -94,7 +102,7 @@ impl Battle {
     fn resolve_hero_action(&mut self, action: Action, events: &mut Vec<CombatEvent>) {
         match action {
             Action::Attack => {
-                let damage = calculate_damage(self.hero.stats.atk, self.enemy.stats.def);
+                let damage = calculate_damage(self.hero.stats().atk, self.enemy.stats().def);
                 self.enemy.take_damage(damage);
                 events.push(CombatEvent::DamageDealt {
                     source: Combatant::Hero,
@@ -125,7 +133,7 @@ impl Battle {
     }
 
     fn resolve_enemy_action(&mut self, events: &mut Vec<CombatEvent>) {
-        let mut damage = calculate_damage(self.enemy.stats.atk, self.hero.stats.def);
+        let mut damage = calculate_damage(self.enemy.stats().atk, self.hero.stats().def);
 
         if self.hero_guarding {
             self.hero_guarding = false;
